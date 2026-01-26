@@ -39,8 +39,8 @@ public class AlertService {
             BigDecimal difference = latestPrice.subtract(previousPrice).abs(); // absolute value
 
             if (difference.compareTo(BigDecimal.valueOf(Dictionary.setOunceDropDown)) > 0) {
+                telegramService.sendMessage("DROP DOWN 25");
                 log.info("Price changed more than 25! Previous: {}, Latest: {}", previousPrice, latestPrice);
-                telegramService.send("Drop " + Dictionary.setOunceDropDown);
             } else {
                 log.info("Price change within range. Previous: {}, Latest: {}", previousPrice, latestPrice);
             }
