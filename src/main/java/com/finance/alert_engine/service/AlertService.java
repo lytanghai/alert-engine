@@ -23,7 +23,7 @@ public class AlertService {
     @Scheduled(fixedRate = 300000)
     public void checkPriceCorrection() {
         log.info("fetching latest price...");
-
+        wake();
         XauResponse xauResponse =
                 restTemplate.getForObject(Dictionary.xau_url, XauResponse.class);
 
@@ -88,6 +88,11 @@ public class AlertService {
         }
 
         return null; // below 25 → ignore
+    }
+
+    void wake() {
+        String url = "https://disciplinary-maren-tanghai-2617c143.koyeb.app/health";
+        restTemplate.getForObject(url, String.class);
     }
 
 }
