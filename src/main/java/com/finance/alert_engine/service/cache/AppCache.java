@@ -1,10 +1,8 @@
-package com.finance.alert_engine.service;
+package com.finance.alert_engine.service.cache;
 
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class AppCache {

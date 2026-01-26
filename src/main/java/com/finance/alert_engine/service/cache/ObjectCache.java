@@ -1,4 +1,4 @@
-package com.finance.alert_engine.service;
+package com.finance.alert_engine.service.cache;
 
 import org.springframework.stereotype.Service;
 

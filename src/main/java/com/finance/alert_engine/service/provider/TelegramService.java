@@ -1,4 +1,4 @@
-package com.finance.alert_engine.service;
+package com.finance.alert_engine.service.provider;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;

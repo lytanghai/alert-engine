@@ -2,6 +2,8 @@ package com.finance.alert_engine.service;
 
 import com.finance.alert_engine.Dictionary;
 import com.finance.alert_engine.dto.XauResponse;
+import com.finance.alert_engine.service.cache.ObjectCache;
+import com.finance.alert_engine.service.provider.TelegramService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -22,8 +24,9 @@ public class AlertService {
 
     @Scheduled(fixedRate = 300000)
     public void checkPriceCorrection() {
-        log.info("fetching latest price...");
-        wake();
+        log.info("Fetching latest price...");
+        wake(); // self-ping to prevent cold sleep
+
         XauResponse xauResponse =
                 restTemplate.getForObject(Dictionary.xau_url, XauResponse.class);
 
@@ -40,55 +43,92 @@ public class AlertService {
 
         BigDecimal previousPrice = lastPrices.get(0);
 
-        // Only care about DROP
-        if (latestPrice.compareTo(previousPrice) >= 0) {
-            objectCache.add(latestPrice);
-            return;
+        // DROP logic
+        if (latestPrice.compareTo(previousPrice) < 0) {
+            BigDecimal dropAmount = previousPrice.subtract(latestPrice); // positive
+            String alertType = getDropType(dropAmount);
+            if (alertType != null) {
+                sendTelegramAlert("📉", alertType, dropAmount, latestPrice, previousPrice);
+            }
         }
-
-        BigDecimal dropAmount = previousPrice.subtract(latestPrice); // positive drop
-
-        String alertType = getDropType(dropAmount);
-
-        if (alertType != null) {
-            String message = String.format(
-                    "📉 <b> ~ %s</b>\n" +
-                    "🔻 Drop: <b>%s</b>\n" +
-                    "💰 Current: <b>%s</b>\n" +
-                    "📊 Previous: <b>%s</b>",
-                    alertType,
-                    dropAmount,
-                    latestPrice,
-                    previousPrice
-            );
-
-            telegramService.sendMessage(message);
-
-            log.info("{} detected. Drop: {}, Previous: {}, Current: {}",
-                    alertType, dropAmount, previousPrice, latestPrice);
+        // RISE logic
+        else if (latestPrice.compareTo(previousPrice) > 0) {
+            BigDecimal riseAmount = latestPrice.subtract(previousPrice); // positive
+            String alertType = getRiseType(riseAmount);
+            if (alertType != null) {
+                sendTelegramAlert("📈", alertType, riseAmount, latestPrice, previousPrice);
+            }
         }
 
         objectCache.add(latestPrice);
     }
 
+    private void sendTelegramAlert(String emoji, String alertType, BigDecimal amount, BigDecimal current, BigDecimal previous) {
+        String message = String.format(
+                "%s <b>%s</b>\n" +
+                        "⬆️/⬇️ Change: <b>%s</b>\n" +
+                        "💰 Current: <b>%s</b>\n" +
+                        "📊 Previous: <b>%s</b>",
+                emoji,
+                alertType,
+                amount,
+                current,
+                previous
+        );
+
+        telegramService.sendMessage(message);
+        log.info("{} detected. Change: {}, Previous: {}, Current: {}", alertType, amount, previous, current);
+    }
+
+
     private String getDropType(BigDecimal drop) {
 
         if (drop.compareTo(BigDecimal.valueOf(Dictionary.dropDown25OunceDropDown)) >= 0
                 && drop.compareTo(BigDecimal.valueOf(Dictionary.dropDown50OunceDropDown)) < 0) {
-            return "Small Drop Alert!";
+            return "🔻Small Drop Alert!"; // 25–49
         }
 
         if (drop.compareTo(BigDecimal.valueOf(Dictionary.dropDown50OunceDropDown)) >= 0
-                && drop.compareTo(BigDecimal.valueOf(Dictionary.dropDown100OunceDropDown)) <= 0) {
-            return "Big Drop Alert!";
+                && drop.compareTo(BigDecimal.valueOf(Dictionary.dropDown100OunceDropDown)) < 0) {
+            return "🔻Medium Drop Alert!"; // 50–99
         }
 
-        if (drop.compareTo(BigDecimal.valueOf(Dictionary.dropDown100OunceDropDown)) > 0) {
-            return "Major Drop Alert!";
+        if (drop.compareTo(BigDecimal.valueOf(Dictionary.dropDown100OunceDropDown)) >= 0
+                && drop.compareTo(BigDecimal.valueOf(Dictionary.dropDown150OunceDropDown)) < 0) {
+            return "🔻Big Drop Alert!"; // 100–149
+        }
+
+        if (drop.compareTo(BigDecimal.valueOf(Dictionary.dropDown200OunceDropDown)) >= 0) {
+            return "🔻Major Drop Alert!"; // 200+
         }
 
         return null; // below 25 → ignore
     }
+
+    private String getRiseType(BigDecimal rise) {
+
+        if (rise.compareTo(BigDecimal.valueOf(Dictionary.dropDown25OunceDropDown)) >= 0
+                && rise.compareTo(BigDecimal.valueOf(Dictionary.dropDown50OunceDropDown)) < 0) {
+            return "🔺 Small Rise Alert!"; // 25–49
+        }
+
+        if (rise.compareTo(BigDecimal.valueOf(Dictionary.dropDown50OunceDropDown)) >= 0
+                && rise.compareTo(BigDecimal.valueOf(Dictionary.dropDown100OunceDropDown)) < 0) {
+            return "🔺 Medium Rise Alert!"; // 50–99
+        }
+
+        if (rise.compareTo(BigDecimal.valueOf(Dictionary.dropDown100OunceDropDown)) >= 0
+                && rise.compareTo(BigDecimal.valueOf(Dictionary.dropDown150OunceDropDown)) < 0) {
+            return "🔺 Big Rise Alert!"; // 100–149
+        }
+
+        if (rise.compareTo(BigDecimal.valueOf(Dictionary.dropDown200OunceDropDown)) >= 0) {
+            return  "🔺 Major Rise Alert!"; // 200+
+        }
+
+        return null; // below 25 → ignore
+    }
+
 
     void wake() {
         String url = "https://disciplinary-maren-tanghai-2617c143.koyeb.app/health";
