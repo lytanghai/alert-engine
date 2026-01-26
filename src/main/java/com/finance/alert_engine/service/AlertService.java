@@ -35,6 +35,11 @@ public class AlertService {
         BigDecimal latestPrice = xauResponse.getPrice();
 
         List<BigDecimal> lastPrices = objectCache.getLastN(1);
+        BigDecimal previous = lastPrices.get(0);
+
+        BigDecimal difference = previous.subtract(latestPrice);
+
+        log.info("previous {} - latest {} = {}", previous, latestPrice, difference);
         if (lastPrices.isEmpty()) {
             objectCache.add(latestPrice);
             log.info("No previous price found. Saved latest price.");
