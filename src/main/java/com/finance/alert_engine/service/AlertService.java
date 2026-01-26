@@ -23,6 +23,8 @@ public class AlertService {
     @Scheduled(fixedRate = 300000)
     public void checkPriceCorrection() {
 
+        telegramService.sendMessage("Application has lived!");
+
         if(objectCache.getAll().isEmpty())
             log.info("no previous prices found");
 
