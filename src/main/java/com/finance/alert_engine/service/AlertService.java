@@ -22,6 +22,7 @@ public class AlertService {
 
     @Scheduled(fixedRate = 300000)
     public void checkPriceCorrection() {
+        log.info("fetching latest price...");
 
         XauResponse xauResponse =
                 restTemplate.getForObject(Dictionary.xau_url, XauResponse.class);
