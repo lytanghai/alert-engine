@@ -23,31 +23,70 @@ public class AlertService {
     @Scheduled(fixedRate = 300000)
     public void checkPriceCorrection() {
 
-        telegramService.sendMessage("Application has lived!");
+        XauResponse xauResponse =
+                restTemplate.getForObject(Dictionary.xau_url, XauResponse.class);
 
-        if(objectCache.getAll().isEmpty())
-            log.info("no previous prices found");
-
-        XauResponse xauResponse = restTemplate.getForObject(Dictionary.xau_url, XauResponse.class);
-
-        if(xauResponse == null) return;
+        if (xauResponse == null || xauResponse.getPrice() == null) return;
 
         BigDecimal latestPrice = xauResponse.getPrice();
 
-        List<BigDecimal> lastTwo = objectCache.getLastN(1);
-
-        if (lastTwo.size() == 1) {
-            BigDecimal previousPrice = lastTwo.get(0); // second-to-last
-            BigDecimal difference = latestPrice.subtract(previousPrice).abs(); // absolute value
-
-            if (difference.compareTo(BigDecimal.valueOf(Dictionary.setOunceDropDown)) > 0) {
-                telegramService.sendMessage("DROP DOWN 25");
-                log.info("Price changed more than 25! Previous: {}, Latest: {}", previousPrice, latestPrice);
-            } else {
-                log.info("Price change within range. Previous: {}, Latest: {}", previousPrice, latestPrice);
-            }
+        List<BigDecimal> lastPrices = objectCache.getLastN(1);
+        if (lastPrices.isEmpty()) {
+            objectCache.add(latestPrice);
+            log.info("No previous price found. Saved latest price.");
+            return;
         }
-        objectCache.add(latestPrice);
 
+        BigDecimal previousPrice = lastPrices.get(0);
+
+        // Only care about DROP
+        if (latestPrice.compareTo(previousPrice) >= 0) {
+            objectCache.add(latestPrice);
+            return;
+        }
+
+        BigDecimal dropAmount = previousPrice.subtract(latestPrice); // positive drop
+
+        String alertType = getDropType(dropAmount);
+
+        if (alertType != null) {
+            String message = String.format(
+                    "📉 <b> ~ %s</b>\n" +
+                    "🔻 Drop: <b>%s</b>\n" +
+                    "💰 Current: <b>%s</b>\n" +
+                    "📊 Previous: <b>%s</b>",
+                    alertType,
+                    dropAmount,
+                    latestPrice,
+                    previousPrice
+            );
+
+            telegramService.sendMessage(message);
+
+            log.info("{} detected. Drop: {}, Previous: {}, Current: {}",
+                    alertType, dropAmount, previousPrice, latestPrice);
+        }
+
+        objectCache.add(latestPrice);
     }
+
+    private String getDropType(BigDecimal drop) {
+
+        if (drop.compareTo(BigDecimal.valueOf(Dictionary.dropDown25OunceDropDown)) >= 0
+                && drop.compareTo(BigDecimal.valueOf(Dictionary.dropDown50OunceDropDown)) < 0) {
+            return "Small Drop Alert!";
+        }
+
+        if (drop.compareTo(BigDecimal.valueOf(Dictionary.dropDown50OunceDropDown)) >= 0
+                && drop.compareTo(BigDecimal.valueOf(Dictionary.dropDown100OunceDropDown)) <= 0) {
+            return "Big Drop Alert!";
+        }
+
+        if (drop.compareTo(BigDecimal.valueOf(Dictionary.dropDown100OunceDropDown)) > 0) {
+            return "Major Drop Alert!";
+        }
+
+        return null; // below 25 → ignore
+    }
+
 }
