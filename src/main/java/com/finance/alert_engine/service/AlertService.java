@@ -27,44 +27,49 @@ public class AlertService {
         log.info("Fetching latest price...");
         wake(); // self-ping to prevent cold sleep
 
-        XauResponse xauResponse =
-                restTemplate.getForObject(Dictionary.xau_url, XauResponse.class);
+        XauResponse xauResponse = restTemplate.getForObject(Dictionary.xau_url, XauResponse.class);
 
-        if (xauResponse == null || xauResponse.getPrice() == null) return;
-
-        BigDecimal latestPrice = xauResponse.getPrice();
-
-        List<BigDecimal> lastPrices = objectCache.getLastN(1);
-        BigDecimal previous = lastPrices.get(0);
-
-        BigDecimal difference = previous.subtract(latestPrice);
-
-        log.info("previous {} - latest {} = {}", previous, latestPrice, difference);
-        if (lastPrices.isEmpty()) {
-            objectCache.add(latestPrice);
-            log.info("No previous price found. Saved latest price.");
+        if (xauResponse == null || xauResponse.getPrice() == null)  {
+            log.info("xauResponse not is empty");
             return;
         }
 
-        BigDecimal previousPrice = lastPrices.get(0);
+        log.info("Latest price is {}", xauResponse.getPrice());
 
-        // DROP logic
-        if (latestPrice.compareTo(previousPrice) < 0) {
-            BigDecimal dropAmount = previousPrice.subtract(latestPrice); // positive
-            String alertType = getDropType(dropAmount);
-            if (alertType != null) {
+        BigDecimal latestPrice = xauResponse.getPrice();
+
+        if(!objectCache.getAll().isEmpty()) {
+            List<BigDecimal> lastPrices = objectCache.getLastN(1);
+            BigDecimal previous = lastPrices.get(0);
+
+            BigDecimal difference = previous.subtract(latestPrice);
+
+            log.info("previous {} - latest {} = {}", previous, latestPrice, difference);
+            if (lastPrices.isEmpty()) {
+                objectCache.add(latestPrice);
+                log.info("No previous price found. Saved latest price.");
+                return;
+            }
+
+            BigDecimal previousPrice = lastPrices.get(0);
+
+            // DROP logic
+            if (latestPrice.compareTo(previousPrice) < 0) {
+                BigDecimal dropAmount = previousPrice.subtract(latestPrice); // positive
+                String alertType = getDropType(dropAmount);
+                if (alertType != null) {
                 sendTelegramAlert("📉", alertType, dropAmount, latestPrice, previousPrice);
+                }
             }
-        }
-        // RISE logic
-        else if (latestPrice.compareTo(previousPrice) > 0) {
-            BigDecimal riseAmount = latestPrice.subtract(previousPrice); // positive
-            String alertType = getRiseType(riseAmount);
-            if (alertType != null) {
+            // RISE logic
+            else if (latestPrice.compareTo(previousPrice) > 0) {
+                BigDecimal riseAmount = latestPrice.subtract(previousPrice); // positive
+                String alertType = getRiseType(riseAmount);
+                if (alertType != null) {
                 sendTelegramAlert("📈", alertType, riseAmount, latestPrice, previousPrice);
+                }
             }
         }
-
         objectCache.add(latestPrice);
     }
 
@@ -139,5 +144,4 @@ public class AlertService {
         String url = "https://disciplinary-maren-tanghai-2617c143.koyeb.app/health";
         restTemplate.getForObject(url, String.class);
     }
-
 }
