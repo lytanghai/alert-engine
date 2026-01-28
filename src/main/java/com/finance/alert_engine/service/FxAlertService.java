@@ -32,7 +32,6 @@ public class FxAlertService {
     @Scheduled(fixedRate = 300000)
     private void alert() {
         String trend = "=";
-        String emoji = "";
         double diff = 0.0;
 
         wake();
@@ -54,45 +53,26 @@ public class FxAlertService {
 
         if(latestPrice > previousPriceClosed) {
             trend = ">";
-            emoji = "📈";
             diff = latestPrice - previousPriceClosed;
         } else {
             trend = "<";
-            emoji = "📉";
             diff = previousPriceClosed - latestPrice;
         }
-
-        getDiffResult(diff, trend);
-
-        sendTelegramAlert(trend, diff, latestPrice, previousPriceClosed);
+        sendTelegramAlert(getDiffResult(diff, trend), diff, latestPrice, previousPriceClosed);
 
         objectCache.add(latestPrice);
 
     }
     private void sendTelegramAlert(String alertType, double amount, double current, double previous) {
-        String valueEmoji;
-        String emoji;
-        if (amount > 0) {
-            emoji = "⬆️";
-            valueEmoji = "🟢 ";
-        } else if (amount < 0) {
-            emoji = "⬇️";
-            valueEmoji = "🔴 ";
-        } else {
-            emoji = "➡️";
-            valueEmoji = "🟡 ";
-        }
         String message = String.format(
-                "%s <b>%s</b>\n" +
-                        "📉 <b>Change</b>: %s<b>%s</b> oz\n" +
-                        "💰 <b>Current</b>: <b>%s</b> oz\n" +
-                        "📊 <b>Previous</b>: <b>%s</b> oz",
-                emoji,
+                "<b>%s</b>\n" +
+                "📉 <b>Changed</b>:<b>%s</b>\n" +
+                "📊 <b>Previous</b>: <b>%s</b>",
+                "💰 <b>Current</b>: <b>%s</b>\n" +
                 alertType,
-                valueEmoji,
                 fmt(amount),
-                fmt(current),
-                fmt(previous)
+                fmt(previous),
+                fmt(current)
         );
 
         telegramService.sendMessage(message);
@@ -104,7 +84,6 @@ public class FxAlertService {
     }
 
     private String getDiffResult(double diff, String trend) {
-
         if ("<".equals(trend)) {
             if(diff >= 25 && diff <= 50) {
                 return  diff + " 🔻Small Drop Alert!"; // 25–49
@@ -137,11 +116,8 @@ public class FxAlertService {
             if(diff > 150) {
                 return diff + " 🔺Major Rise Alert!"; // 200+
             }
-        } else {
-            return diff + " Remain Unchanged!!!";
         }
-
-        return "";
+        return diff + " Remain Unchanged!!!";
 
     }
 
