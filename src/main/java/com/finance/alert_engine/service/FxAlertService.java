@@ -32,6 +32,7 @@ public class FxAlertService {
     @Scheduled(fixedRate = 300000) // 5 minutes
     private void alert() {
 
+        log.info("Incoming...");
         wake();
 
         XauResponse xauResponse =
@@ -52,7 +53,7 @@ public class FxAlertService {
 
         double previous = (double) objectCache.getLastN(1).get(0);
 
-        double diff = Math.abs(latest - previous);
+        double diff = latest - previous;
         boolean isUp = latest > previous;
 
         String alertType = getDiffResult(diff, isUp);
@@ -98,7 +99,8 @@ public class FxAlertService {
 
     private String getDiffResult(double diff, boolean isUp) {
 
-        if (diff < 25) return null;
+        if (diff < 25) return "Consolidation";
+
 
         if (isUp) {
             if (diff < 50) return "Small Rise Alert";
