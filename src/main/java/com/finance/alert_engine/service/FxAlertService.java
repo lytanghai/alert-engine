@@ -54,12 +54,6 @@ public class FxAlertService {
 
         double diff = Math.abs(latest - previous);
         boolean isUp = latest > previous;
-        boolean isDown = latest < previous;
-
-        if (!isUp && !isDown) {
-            objectCache.add(latest);
-            return;
-        }
 
         String alertType = getDiffResult(diff, isUp);
 
