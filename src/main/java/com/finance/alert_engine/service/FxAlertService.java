@@ -59,6 +59,10 @@ public class FxAlertService {
         String alertType = getDiffResult(diff, isUp);
 
         if (alertType != null) {
+
+            if("Consolidation".equals(alertType))
+                return;
+
             sendTelegramAlert(alertType, diff, latest, previous);
         }
 
