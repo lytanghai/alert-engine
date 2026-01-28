@@ -44,8 +44,11 @@ public class FxAlertService {
         }
         double latestPrice = xauResponse.getPrice();
 
-        if(objectCache.getAll().isEmpty())
+        if(objectCache.getAll().isEmpty()){
+            log.info("first price init!");
+            objectCache.add(latestPrice);
             return;
+        }
 
         double previousPriceClosed = Double.valueOf((Double) objectCache.getLastN(1).get(0));
 
