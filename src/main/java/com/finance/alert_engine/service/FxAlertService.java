@@ -64,26 +64,43 @@ public class FxAlertService {
 
         getDiffResult(diff, trend);
 
-        sendTelegramAlert(emoji, trend, diff, latestPrice, previousPriceClosed);
+        sendTelegramAlert(trend, diff, latestPrice, previousPriceClosed);
 
         objectCache.add(latestPrice);
 
     }
-    private void sendTelegramAlert(String emoji, String alertType, double amount, double current, double previous) {
+    private void sendTelegramAlert(String alertType, double amount, double current, double previous) {
+        String valueEmoji;
+        String emoji;
+        if (amount > 0) {
+            emoji = "⬆️";
+            valueEmoji = "🟢 ";
+        } else if (amount < 0) {
+            emoji = "⬇️";
+            valueEmoji = "🔴 ";
+        } else {
+            emoji = "➡️";
+            valueEmoji = "🟡 ";
+        }
         String message = String.format(
                 "%s <b>%s</b>\n" +
-                "⬆️/⬇️ Change: <b>%s</b>\n" +
-                "💰 Current: <b>%s</b>\n" +
-                "📊 Previous: <b>%s</b>",
+                        "📉 <b>Change</b>: %s<b>%s</b> oz\n" +
+                        "💰 <b>Current</b>: <b>%s</b> oz\n" +
+                        "📊 <b>Previous</b>: <b>%s</b> oz",
                 emoji,
                 alertType,
-                amount,
-                current,
-                previous
+                valueEmoji,
+                fmt(amount),
+                fmt(current),
+                fmt(previous)
         );
 
         telegramService.sendMessage(message);
         log.info("{} detected. Change: {}, Previous: {}, Current: {}", alertType, amount, previous, current);
+    }
+
+    private String fmt(double value) {
+        return String.format("%.2f", value);
     }
 
     private String getDiffResult(double diff, String trend) {
