@@ -29,96 +29,95 @@ public class FxAlertService {
         restTemplate.getForObject(url, String.class);
     }
 
-    @Scheduled(fixedRate = 300000)
+    @Scheduled(fixedRate = 300000) // 5 minutes
     private void alert() {
-        String trend = "=";
-        double diff = 0.0;
 
         wake();
 
-        XauResponse xauResponse = restTemplate.getForObject(Dictionary.xau_url, XauResponse.class);
-        if (xauResponse == null || xauResponse.getPrice() == null)  {
-            log.info("xauResponse not is empty");
-            return;
-        }
-        double latestPrice = xauResponse.getPrice();
+        XauResponse xauResponse =
+                restTemplate.getForObject(Dictionary.xau_url, XauResponse.class);
 
-        if(objectCache.getAll().isEmpty()){
-            log.info("first price init!");
-            objectCache.add(latestPrice);
+        if (xauResponse == null || xauResponse.getPrice() == null) {
+            log.warn("Failed to fetch XAU price");
             return;
         }
 
-        double previousPriceClosed = Double.valueOf((Double) objectCache.getLastN(1).get(0));
+        double latest = xauResponse.getPrice();
 
-        if(latestPrice > previousPriceClosed) {
-            trend = ">";
-            diff = latestPrice - previousPriceClosed;
-        } else {
-            trend = "<";
-            diff = previousPriceClosed - latestPrice;
+        if (objectCache.getAll().isEmpty()) {
+            objectCache.add(latest);
+            log.info("Initial price saved: {}", latest);
+            return;
         }
-        sendTelegramAlert(getDiffResult(diff, trend), diff, latestPrice, previousPriceClosed);
 
-        objectCache.add(latestPrice);
+        double previous = (double) objectCache.getLastN(1).get(0);
 
+        double diff = Math.abs(latest - previous);
+        boolean isUp = latest > previous;
+        boolean isDown = latest < previous;
+
+        if (!isUp && !isDown) {
+            objectCache.add(latest);
+            return;
+        }
+
+        String alertType = getDiffResult(diff, isUp);
+
+        if (alertType != null) {
+            sendTelegramAlert(alertType, diff, latest, previous);
+        }
+
+        objectCache.add(latest);
     }
-    private void sendTelegramAlert(String alertType, double amount, double current, double previous) {
+
+    private void sendTelegramAlert(String alertType,
+                                   double amount,
+                                   double current,
+                                   double previous) {
+
+        String valueEmoji = current > previous ? "🟢" : "🔴";
+        String arrowEmoji = current > previous ? "⬆️" : "⬇️";
+
         String message = String.format(
-                "<b>%s</b>\n" +
-                "📉 <b>Changed</b>:<b>%s</b>\n" +
-                "📊 <b>Previous</b>: <b>%s</b>",
-                "💰 <b>Current</b>: <b>%s</b>\n" +
+                "%s <b>%s</b>\n\n" +
+                        "📉 <b>Change</b>: %s <b>%s</b>\n" +
+                        "💰 <b>Current</b>: <b>%s</b>\n" +
+                        "📊 <b>Previous</b>: <b>%s</b>",
+                arrowEmoji,
                 alertType,
+                valueEmoji,
                 fmt(amount),
-                fmt(previous),
-                fmt(current)
+                fmt(current),
+                fmt(previous)
         );
 
         telegramService.sendMessage(message);
-        log.info("{} detected. Change: {}, Previous: {}, Current: {}", alertType, amount, previous, current);
+
+        log.info("{} | Change: {} | Prev: {} | Curr: {}",
+                alertType, amount, previous, current);
     }
+
 
     private String fmt(double value) {
         return String.format("%.2f", value);
     }
 
-    private String getDiffResult(double diff, String trend) {
-        if ("<".equals(trend)) {
-            if(diff >= 25 && diff <= 50) {
-                return  diff + " 🔻Small Drop Alert!"; // 25–49
-            }
+    private String getDiffResult(double diff, boolean isUp) {
 
-            if(diff >= 50 && diff <= 100) {
-                return diff + " 🔻Medium Drop Alert!"; // 50–99
-            }
+        if (diff < 25) return null;
 
-            if(diff >= 100 && diff <= 150) {
-                return diff + " 🔻Big Drop Alert!"; // 100–149
-            }
-
-            if(diff > 150) {
-                return diff + " 🔻Major Drop Alert!"; // 200+
-            }
-        } else if(">".equals(trend)) {
-            if(diff >= 25 && diff <= 50) {
-                return  diff + " 🔺Small Rise Alert!"; // 25–49
-            }
-
-            if(diff >= 50 && diff <= 100) {
-                return diff + " 🔺Medium Rise Alert!"; // 50–99
-            }
-
-            if(diff >= 100 && diff <= 150) {
-                return diff + " 🔺Big Rise Alert!"; // 100–149
-            }
-
-            if(diff > 150) {
-                return diff + " 🔺Major Rise Alert!"; // 200+
-            }
+        if (isUp) {
+            if (diff < 50) return "Small Rise Alert";
+            if (diff < 100) return "Medium Rise Alert";
+            if (diff < 150) return "Big Rise Alert";
+            return "Major Rise Alert";
+        } else {
+            if (diff < 50) return "Small Drop Alert";
+            if (diff < 100) return "Medium Drop Alert";
+            if (diff < 150) return "Big Drop Alert";
+            return "Major Drop Alert";
         }
-        return diff + " Remain Unchanged!!!";
-
     }
+
 
 }
