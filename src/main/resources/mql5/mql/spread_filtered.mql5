@@ -1,0 +1,10 @@
+bool IsSpreadOK(double maxSpreadPoints)
+{
+   double spread = (SymbolInfoDouble(_Symbol, SYMBOL_ASK) - 
+                    SymbolInfoDouble(_Symbol, SYMBOL_BID)) / _Point;
+
+   return (spread <= maxSpreadPoints);
+}
+
+*how to use
+if(!IsSpreadOK(30)) return;  // skip if spread > 30 points

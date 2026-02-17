@@ -1,0 +1,8 @@
+datetime lastTradeTime = 0;
+
+bool IsCooldownOver(int seconds)
+{
+   if(TimeCurrent() - lastTradeTime >= seconds)
+      return true;
+   return false;
+}

@@ -1,0 +1,8 @@
+*how to use
+if(!IsSpreadOK(30)) return;  // skip if spread > 30 points
+
+
+During high volatility, spread can explode.
+
+If spread too high → skip trade
+Without this, you lose money instantly.

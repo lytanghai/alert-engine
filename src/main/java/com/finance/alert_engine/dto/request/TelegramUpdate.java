@@ -1,4 +1,4 @@
-package com.finance.alert_engine.dto;
+package com.finance.alert_engine.dto.request;
 
 import lombok.Data;
 

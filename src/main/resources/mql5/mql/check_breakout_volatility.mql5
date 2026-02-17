@@ -1,0 +1,89 @@
+// ===== INPUTS =====
+input string BOT_TOKEN = "YOUR_BOT_TOKEN";
+input string CHAT_ID   = "YOUR_CHAT_ID";
+
+input int    ATR_Period = 14;
+input double ATR_Multiplier = 1.3;
+input double Volume_Multiplier = 1.8;
+input int    BreakoutLookback = 10;   // candles to check breakout
+
+// ===== GLOBAL =====
+int atrHandle;
+double atrBuffer[];
+datetime lastAlertBar = 0;
+
+// ===== INIT =====
+int OnInit()
+{
+   atrHandle = iATR(_Symbol, PERIOD_M1, ATR_Period);
+   return(INIT_SUCCEEDED);
+}
+
+// ===== TELEGRAM FUNCTION =====
+void SendTelegram(string message)
+{
+   string url = "https://api.telegram.org/bot" + BOT_TOKEN + "/sendMessage";
+   string data = "chat_id=" + CHAT_ID + "&text=" + message;
+
+   char result[];
+   char post[];
+   StringToCharArray(data, post);
+
+   int res = WebRequest("POST", url, "", "", 5000, post, result, NULL);
+
+   if(res == -1)
+      Print("Telegram Error: ", GetLastError());
+}
+
+// ===== MAIN DETECTOR =====
+void CheckBreakoutVolatility()
+{
+   if(CopyBuffer(atrHandle, 0, 0, 2, atrBuffer) <= 0)
+      return;
+
+   double currentATR = atrBuffer[0];
+   double previousATR = atrBuffer[1];
+
+   long currentVolume = iVolume(_Symbol, PERIOD_M1, 0);
+   long previousVolume = iVolume(_Symbol, PERIOD_M1, 1);
+
+   bool atrSpike = currentATR > previousATR * ATR_Multiplier;
+   bool volumeSpike = currentVolume > previousVolume * Volume_Multiplier;
+
+   // Avoid duplicate alerts per candle
+   datetime currentBarTime = iTime(_Symbol, PERIOD_M1, 0);
+   if(currentBarTime == lastAlertBar)
+      return;
+
+   // Get Highest High & Lowest Low
+   double highestHigh = iHigh(_Symbol, PERIOD_M1,
+                      iHighest(_Symbol, PERIOD_M1, MODE_HIGH, BreakoutLookback, 1));
+
+   double lowestLow = iLow(_Symbol, PERIOD_M1,
+                     iLowest(_Symbol, PERIOD_M1, MODE_LOW, BreakoutLookback, 1));
+
+   double currentClose = iClose(_Symbol, PERIOD_M1, 0);
+
+   bool breakoutUp = currentClose > highestHigh;
+   bool breakoutDown = currentClose < lowestLow;
+
+   if(atrSpike && volumeSpike && (breakoutUp || breakoutDown))
+   {
+      string direction = breakoutUp ? "BREAKOUT UP 🚀" : "BREAKOUT DOWN 🔻";
+
+      string msg = "⚡ STRONG BREAKOUT DETECTED\n" +
+                   "Symbol: " + _Symbol + "\n" +
+                   direction + "\n" +
+                   "ATR: " + DoubleToString(currentATR, 2) + "\n" +
+                   "Volume: " + IntegerToString(currentVolume);
+
+      SendTelegram(msg);
+      lastAlertBar = currentBarTime;
+   }
+}
+
+// ===== ON TICK =====
+void OnTick()
+{
+   CheckBreakoutVolatility();
+}

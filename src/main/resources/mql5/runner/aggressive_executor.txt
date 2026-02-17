@@ -1,0 +1,9 @@
+Best Setting
+
+----------------------------
+lot_size = 
+trade_size =
+stop_loss =
+take_profit = 
+cooldown_per_trade = 
+----------------------------

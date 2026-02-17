@@ -1,0 +1,20 @@
+// ====== INPUTS ======
+input string BOT_TOKEN = "YOUR_BOT_TOKEN";
+input string CHAT_ID   = "YOUR_CHAT_ID";
+
+// ====== TELEGRAM FUNCTION ======
+void SendTelegramMessage(string message)
+{
+   string url = "https://api.telegram.org/bot" + BOT_TOKEN + "/sendMessage";
+   
+   string data = "chat_id=" + CHAT_ID + "&text=" + message;
+
+   char result[];
+   char post[];
+   StringToCharArray(data, post);
+
+   int res = WebRequest("POST", url, "", "", 5000, post, result, NULL);
+
+   if(res == -1)
+      Print("Telegram send failed. Error: ", GetLastError());
+}

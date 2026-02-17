@@ -1,6 +1,6 @@
 package com.finance.alert_engine.controller;
 
-import com.finance.alert_engine.dto.TelegramUpdate;
+import com.finance.alert_engine.dto.request.TelegramUpdate;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 public class TelegramWebhookController {
 
-    //https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://disciplinary-maren-tanghai-2617c143.koyeb.app/telegram/webhook
+    //https://api.telegram.org/bot6146637472:AAEF3MsqfUsFD4PXc81Ro4tYpiNyu4ajwQI/setWebhook?url=https://disciplinary-maren-tanghai-2617c143.koyeb.app/telegram/webhook
     @PostMapping("/webhook")
     public ResponseEntity<Void> onUpdate(@RequestBody TelegramUpdate update) {
 

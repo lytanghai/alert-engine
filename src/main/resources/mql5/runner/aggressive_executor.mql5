@@ -1,0 +1,1023 @@
+//+------------------------------------------------------------------+
+//|                                        TickHunter - Ultra Aggressive |
+//|                                With MOVABLE UI DASHBOARD         |
+//+------------------------------------------------------------------+
+#property copyright "Copyright 2026"
+#property version   "1.00"
+#property strict
+
+#include <Trade/Trade.mqh>
+CTrade Trade;
+
+//+------------------------------------------------------------------+
+//| Input Parameters                                                 |
+//+------------------------------------------------------------------+
+input double   LotSize          = 0.01;      // Lot size
+input int      MaxOpenTrades    = 20;        // Max open trades at once
+input double   TakeProfitPips   = 5.0;       // Take Profit in pips
+input double   StopLossPips     = 3.0;       // Stop Loss in pips
+input int      CooldownSeconds  = 5;         // Cooldown seconds between trades
+input int      MagicNumber      = 888888;    // Magic number
+input int      Slippage         = 100;       // Slippage in points
+input bool     ShowDashboard    = true;      // Show UI dashboard
+input int      DashboardX       = 20;        // Dashboard X position (can be changed)
+input int      DashboardY       = 20;        // Dashboard Y position (can be changed)
+input color    DashboardBG      = clrBlack;  // Dashboard background color
+input color    DashboardBorder  = clrGold;   // Dashboard border color
+input bool     DashboardMovable = true;      // Allow dashboard to be moved with mouse
+
+//+------------------------------------------------------------------+
+//| Bias Selection with Ratio Control                                |
+//+------------------------------------------------------------------+
+enum ENUM_TRADE_BIAS
+{
+   BIAS_BUY_ONLY,     // BUY Only (100% Buy)
+   BIAS_SELL_ONLY,    // SELL Only (100% Sell)
+   BIAS_BUY_70,       // 70% Buy / 30% Sell
+   BIAS_BUY_60,       // 60% Buy / 40% Sell
+   BIAS_BUY_50,       // 50% Buy / 50% Sell (Balanced)
+   BIAS_SELL_60,      // 40% Buy / 60% Sell
+   BIAS_SELL_70       // 30% Buy / 70% Sell
+};
+
+input ENUM_TRADE_BIAS TradeBias = BIAS_BUY_70;  // Select trading bias ratio
+
+//+------------------------------------------------------------------+
+//| Global Variables                                                 |
+//+------------------------------------------------------------------+
+double lastBid = 0;
+bool isInitialized = false;
+
+// Cooldown variables
+datetime lastTradeTime = 0;
+
+// Bias ratio tracking
+int totalBuyOrders = 0;
+int totalSellOrders = 0;
+int targetBuyPercentage = 70;
+int targetSellPercentage = 30;
+
+// Report variables
+int totalOrders = 0;
+int buyOrders = 0;
+int sellOrders = 0;
+int winningTrades = 0;
+int losingTrades = 0;
+double totalProfit = 0;
+double totalLoss = 0;
+double maxProfit = 0;
+double maxLoss = 0;
+datetime startTime = 0;
+datetime lastDashboardUpdate = 0;
+bool dashboardCreated = false;
+
+// Dashboard position tracking
+int currentX, currentY;
+
+// Dashboard object names
+string dashPrefix = "TickHunter_";
+string dashBG, dashTitle, dashLine1, dashLine2, dashLine3, dashLine4, dashLine5;
+string dashLine6, dashLine7, dashLine8, dashLine9, dashLine10, dashLine11;
+string dashLine12, dashLine13, dashLine14, dashLine15, dashMoveHandle, dashDragText;
+
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   Trade.SetExpertMagicNumber(MagicNumber);
+   Trade.SetDeviationInPoints(Slippage);
+   lastBid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   isInitialized = true;
+   startTime = TimeCurrent();
+   lastTradeTime = 0;
+   currentX = DashboardX;
+   currentY = DashboardY;
+   
+   // Set target percentages based on bias selection
+   SetTargetPercentages();
+   
+   // Load historical data
+   LoadHistoricalStats();
+   
+   Print("═══════════════════════════════════════════════════════════");
+   Print("⚡ TICK HUNTER - ULTRA AGGRESSIVE MODE ⚡");
+   Print("═══════════════════════════════════════════════════════════");
+   Print("Trading on EVERY tick movement");
+   PrintBiasInfo();
+   Print("Lot Size: ", LotSize);
+   Print("Max Open Trades: ", MaxOpenTrades);
+   Print("Cooldown: ", CooldownSeconds, " seconds between trades");
+   Print("Take Profit: ", TakeProfitPips, " pips");
+   Print("Stop Loss: ", StopLossPips, " pips");
+   if(DashboardMovable)
+      Print("Dashboard: MOVABLE - Drag with mouse");
+   Print("═══════════════════════════════════════════════════════════");
+   
+   // Create dashboard on chart
+   if(ShowDashboard)
+      CreateDashboard();
+   
+   return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Print bias information                                           |
+//+------------------------------------------------------------------+
+void PrintBiasInfo()
+{
+   switch(TradeBias)
+   {
+      case BIAS_BUY_ONLY:
+         Print("🔵 BIAS: BUY ONLY (100% Buy)");
+         break;
+      case BIAS_SELL_ONLY:
+         Print("🔴 BIAS: SELL ONLY (100% Sell)");
+         break;
+      case BIAS_BUY_70:
+         Print("🟣 BIAS: 70% Buy / 30% Sell");
+         break;
+      case BIAS_BUY_60:
+         Print("🟣 BIAS: 60% Buy / 40% Sell");
+         break;
+      case BIAS_BUY_50:
+         Print("⚪ BIAS: 50% Buy / 50% Sell (Balanced)");
+         break;
+      case BIAS_SELL_60:
+         Print("🟠 BIAS: 40% Buy / 60% Sell");
+         break;
+      case BIAS_SELL_70:
+         Print("🟠 BIAS: 30% Buy / 70% Sell");
+         break;
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Set target percentages based on bias selection                   |
+//+------------------------------------------------------------------+
+void SetTargetPercentages()
+{
+   switch(TradeBias)
+   {
+      case BIAS_BUY_ONLY:
+         targetBuyPercentage = 100;
+         targetSellPercentage = 0;
+         break;
+      case BIAS_SELL_ONLY:
+         targetBuyPercentage = 0;
+         targetSellPercentage = 100;
+         break;
+      case BIAS_BUY_70:
+         targetBuyPercentage = 70;
+         targetSellPercentage = 30;
+         break;
+      case BIAS_BUY_60:
+         targetBuyPercentage = 60;
+         targetSellPercentage = 40;
+         break;
+      case BIAS_BUY_50:
+         targetBuyPercentage = 50;
+         targetSellPercentage = 50;
+         break;
+      case BIAS_SELL_60:
+         targetBuyPercentage = 40;
+         targetSellPercentage = 60;
+         break;
+      case BIAS_SELL_70:
+         targetBuyPercentage = 30;
+         targetSellPercentage = 70;
+         break;
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Load historical stats from trade history                         |
+//+------------------------------------------------------------------+
+void LoadHistoricalStats()
+{
+   totalOrders = 0;
+   buyOrders = 0;
+   sellOrders = 0;
+   totalBuyOrders = 0;
+   totalSellOrders = 0;
+   winningTrades = 0;
+   losingTrades = 0;
+   totalProfit = 0;
+   totalLoss = 0;
+   maxProfit = 0;
+   maxLoss = 0;
+   
+   // Get today's start
+   MqlDateTime todayStruct;
+   TimeToStruct(TimeCurrent(), todayStruct);
+   todayStruct.hour = 0;
+   todayStruct.min = 0;
+   todayStruct.sec = 0;
+   datetime today = StructToTime(todayStruct);
+   
+   // Select history from today
+   HistorySelect(today, TimeCurrent());
+   
+   int total = HistoryDealsTotal();
+   for(int i = 0; i < total; i++)
+   {
+      ulong ticket = HistoryDealGetTicket(i);
+      if(ticket > 0)
+      {
+         if(HistoryDealGetInteger(ticket, DEAL_MAGIC) == MagicNumber &&
+            HistoryDealGetString(ticket, DEAL_SYMBOL) == _Symbol)
+         {
+            double profit = HistoryDealGetDouble(ticket, DEAL_PROFIT);
+            long type = HistoryDealGetInteger(ticket, DEAL_TYPE);
+            
+            totalOrders++;
+            
+            if(type == DEAL_TYPE_BUY)
+            {
+               buyOrders++;
+               totalBuyOrders++;
+            }
+            else if(type == DEAL_TYPE_SELL)
+            {
+               sellOrders++;
+               totalSellOrders++;
+            }
+            
+            if(profit > 0)
+            {
+               winningTrades++;
+               totalProfit += profit;
+               if(profit > maxProfit)
+                  maxProfit = profit;
+            }
+            else if(profit < 0)
+            {
+               losingTrades++;
+               totalLoss += MathAbs(profit);
+               if(MathAbs(profit) > maxLoss)
+                  maxLoss = MathAbs(profit);
+            }
+         }
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Create UI Dashboard on chart - MOVABLE VERSION                   |
+//+------------------------------------------------------------------+
+void CreateDashboard()
+{
+   if(dashboardCreated) return;
+   
+   int x = currentX;
+   int y = currentY;
+   int width = 380;
+   int height = 420;
+   
+   // Background rectangle - MAKE IT SELECTABLE FOR MOVING
+   dashBG = dashPrefix + "BG";
+   ObjectCreate(0, dashBG, OBJ_RECTANGLE_LABEL, 0, 0, 0);
+   ObjectSetInteger(0, dashBG, OBJPROP_XDISTANCE, x);
+   ObjectSetInteger(0, dashBG, OBJPROP_YDISTANCE, y);
+   ObjectSetInteger(0, dashBG, OBJPROP_XSIZE, width);
+   ObjectSetInteger(0, dashBG, OBJPROP_YSIZE, height);
+   ObjectSetInteger(0, dashBG, OBJPROP_BGCOLOR, DashboardBG);
+   ObjectSetInteger(0, dashBG, OBJPROP_BORDER_TYPE, BORDER_FLAT);
+   ObjectSetInteger(0, dashBG, OBJPROP_CORNER, 0);
+   ObjectSetInteger(0, dashBG, OBJPROP_BACK, false);
+   ObjectSetInteger(0, dashBG, OBJPROP_SELECTABLE, DashboardMovable);
+   ObjectSetInteger(0, dashBG, OBJPROP_SELECTED, false);
+   ObjectSetInteger(0, dashBG, OBJPROP_HIDDEN, true);
+   ObjectSetInteger(0, dashBG, OBJPROP_COLOR, DashboardBorder);
+   ObjectSetInteger(0, dashBG, OBJPROP_WIDTH, 2);
+   
+   // Move handle (small bar at top for dragging)
+   if(DashboardMovable)
+   {
+      dashMoveHandle = dashPrefix + "MOVE";
+      ObjectCreate(0, dashMoveHandle, OBJ_RECTANGLE_LABEL, 0, 0, 0);
+      ObjectSetInteger(0, dashMoveHandle, OBJPROP_XDISTANCE, x);
+      ObjectSetInteger(0, dashMoveHandle, OBJPROP_YDISTANCE, y);
+      ObjectSetInteger(0, dashMoveHandle, OBJPROP_XSIZE, width);
+      ObjectSetInteger(0, dashMoveHandle, OBJPROP_YSIZE, 20);
+      ObjectSetInteger(0, dashMoveHandle, OBJPROP_BGCOLOR, clrDarkBlue);
+      ObjectSetInteger(0, dashMoveHandle, OBJPROP_BORDER_TYPE, BORDER_FLAT);
+      ObjectSetInteger(0, dashMoveHandle, OBJPROP_CORNER, 0);
+      ObjectSetInteger(0, dashMoveHandle, OBJPROP_BACK, false);
+      ObjectSetInteger(0, dashMoveHandle, OBJPROP_SELECTABLE, true);
+      ObjectSetInteger(0, dashMoveHandle, OBJPROP_SELECTED, false);
+      ObjectSetInteger(0, dashMoveHandle, OBJPROP_HIDDEN, true);
+      ObjectSetInteger(0, dashMoveHandle, OBJPROP_COLOR, clrWhite);
+      ObjectSetInteger(0, dashMoveHandle, OBJPROP_WIDTH, 1);
+      
+      // Drag instruction
+      dashDragText = dashPrefix + "DRAG";
+      ObjectCreate(0, dashDragText, OBJ_LABEL, 0, 0, 0);
+      ObjectSetInteger(0, dashDragText, OBJPROP_XDISTANCE, x + 10);
+      ObjectSetInteger(0, dashDragText, OBJPROP_YDISTANCE, y + 2);
+      ObjectSetInteger(0, dashDragText, OBJPROP_CORNER, 0);
+      ObjectSetInteger(0, dashDragText, OBJPROP_COLOR, clrWhite);
+      ObjectSetString(0, dashDragText, OBJPROP_FONT, "Arial");
+      ObjectSetInteger(0, dashDragText, OBJPROP_FONTSIZE, 8);
+      ObjectSetString(0, dashDragText, OBJPROP_TEXT, "⋮⋮ DRAG TO MOVE ⋮⋮");
+      ObjectSetInteger(0, dashDragText, OBJPROP_SELECTABLE, false);
+      ObjectSetInteger(0, dashDragText, OBJPROP_HIDDEN, true);
+   }
+   
+   // Title
+   dashTitle = dashPrefix + "TITLE";
+   CreateLabel(dashTitle, "⚡ TICK HUNTER ULTRA ⚡", x + 10, y + (DashboardMovable ? 25 : 10), clrGold, 12, "Arial Black");
+   
+   int titleY = y + (DashboardMovable ? 50 : 35);
+   
+   // Separator line 1
+   dashLine1 = dashPrefix + "LINE1";
+   CreateLabel(dashLine1, "════════════════════════════════════════", x + 10, titleY, clrGray, 10, "Consolas");
+   
+   // Bias info
+   string biasText = GetBiasText();
+   color biasColor = GetBiasColor();
+   dashLine2 = dashPrefix + "BIAS";
+   CreateLabel(dashLine2, "BIAS: " + biasText, x + 10, titleY + 20, biasColor, 11, "Arial Bold");
+   
+   // Target ratio
+   dashLine3 = dashPrefix + "TARGET";
+   CreateLabel(dashLine3, "TARGET: " + IntegerToString(targetBuyPercentage) + "% Buy / " + 
+               IntegerToString(targetSellPercentage) + "% Sell", x + 10, titleY + 40, clrWhite, 10, "Consolas");
+   
+   // Current ratio
+   dashLine4 = dashPrefix + "CURRENT";
+   CreateLabel(dashLine4, "CURRENT: 0.0% Buy / 0.0% Sell", x + 10, titleY + 60, clrWhite, 10, "Consolas");
+   
+   // Separator line 2
+   dashLine5 = dashPrefix + "LINE2";
+   CreateLabel(dashLine5, "────────────────────────────────────────", x + 10, titleY + 80, clrGray, 10, "Consolas");
+   
+   // Cooldown status
+   dashLine6 = dashPrefix + "COOLDOWN";
+   CreateLabel(dashLine6, "✅ COOLDOWN: READY TO TRADE", x + 10, titleY + 100, clrLime, 10, "Consolas");
+   
+   // Open positions
+   dashLine7 = dashPrefix + "POSITIONS";
+   CreateLabel(dashLine7, "📊 OPEN POSITIONS: 0 / " + IntegerToString(MaxOpenTrades), x + 10, titleY + 120, clrLime, 10, "Consolas");
+   
+   // Separator line 3
+   dashLine8 = dashPrefix + "LINE3";
+   CreateLabel(dashLine8, "────────────────────────────────────────", x + 10, titleY + 140, clrGray, 10, "Consolas");
+   
+   // Order stats
+   dashLine9 = dashPrefix + "ORDERS";
+   CreateLabel(dashLine9, "📈 ORDERS: 0 (🔵 0 / 🔴 0)", x + 10, titleY + 160, clrWhite, 10, "Consolas");
+   
+   // Win/Loss stats
+   dashLine10 = dashPrefix + "WINLOSS";
+   CreateLabel(dashLine10, "🎯 WIN: 0 / 💔 LOSS: 0", x + 10, titleY + 180, clrWhite, 10, "Consolas");
+   
+   // Win rate
+   dashLine11 = dashPrefix + "WINRATE";
+   CreateLabel(dashLine11, "📊 WIN RATE: 0.0%", x + 10, titleY + 200, clrWhite, 10, "Consolas");
+   
+   // Separator line 4
+   dashLine12 = dashPrefix + "LINE4";
+   CreateLabel(dashLine12, "────────────────────────────────────────", x + 10, titleY + 220, clrGray, 10, "Consolas");
+   
+   // Profit/Loss
+   dashLine13 = dashPrefix + "PROFIT";
+   CreateLabel(dashLine13, "💰 NET P/L: $0.00 (P: $0.00 / L: $0.00)", x + 10, titleY + 240, clrWhite, 10, "Consolas");
+   
+   // Max profit/loss
+   dashLine14 = dashPrefix + "MAX";
+   CreateLabel(dashLine14, "🏆 MAX: $0.00 / 💔 MIN: $0.00", x + 10, titleY + 260, clrWhite, 10, "Consolas");
+   
+   // Update time
+   dashLine15 = dashPrefix + "TIME";
+   CreateLabel(dashLine15, "⏱️ UPDATED: " + TimeToString(TimeCurrent(), TIME_SECONDS), x + 10, titleY + 300, clrGray, 9, "Consolas");
+   
+   dashboardCreated = true;
+   ChartRedraw(0);
+}
+
+//+------------------------------------------------------------------+
+//| Helper to create label                                           |
+//+------------------------------------------------------------------+
+void CreateLabel(string name, string text, int x, int y, color clr, int fontSize, string font)
+{
+   ObjectCreate(0, name, OBJ_LABEL, 0, 0, 0);
+   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
+   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
+   ObjectSetInteger(0, name, OBJPROP_CORNER, 0);
+   ObjectSetInteger(0, name, OBJPROP_COLOR, clr);
+   ObjectSetString(0, name, OBJPROP_FONT, font);
+   ObjectSetInteger(0, name, OBJPROP_FONTSIZE, fontSize);
+   ObjectSetString(0, name, OBJPROP_TEXT, text);
+   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+   ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
+}
+
+//+------------------------------------------------------------------+
+//| Chart event handler - FOR MOVING DASHBOARD                       |
+//+------------------------------------------------------------------+
+void OnChartEvent(const int id,
+                  const long &lparam,
+                  const double &dparam,
+                  const string &sparam)
+{
+   if(!DashboardMovable || !dashboardCreated) return;
+   
+   // Handle object dragging
+   if(id == CHARTEVENT_OBJECT_DRAG)
+   {
+      // Check if it's our dashboard background or move handle
+      if(sparam == dashBG || sparam == dashMoveHandle)
+      {
+         // Get new position
+         int x = (int)ObjectGetInteger(0, sparam, OBJPROP_XDISTANCE);
+         int y = (int)ObjectGetInteger(0, sparam, OBJPROP_YDISTANCE);
+         
+         // Update all dashboard objects to new position
+         MoveDashboard(x, y);
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Move entire dashboard to new position                            |
+//+------------------------------------------------------------------+
+void MoveDashboard(int newX, int newY)
+{
+   currentX = newX;
+   currentY = newY;
+   
+   int titleY = newY + (DashboardMovable ? 50 : 35);
+   
+   // Move background
+   ObjectSetInteger(0, dashBG, OBJPROP_XDISTANCE, newX);
+   ObjectSetInteger(0, dashBG, OBJPROP_YDISTANCE, newY);
+   
+   // Move handle if exists
+   if(DashboardMovable && ObjectFind(0, dashMoveHandle) >= 0)
+   {
+      ObjectSetInteger(0, dashMoveHandle, OBJPROP_XDISTANCE, newX);
+      ObjectSetInteger(0, dashMoveHandle, OBJPROP_YDISTANCE, newY);
+      
+      if(ObjectFind(0, dashDragText) >= 0)
+      {
+         ObjectSetInteger(0, dashDragText, OBJPROP_XDISTANCE, newX + 10);
+         ObjectSetInteger(0, dashDragText, OBJPROP_YDISTANCE, newY + 2);
+      }
+   }
+   
+   // Move title
+   if(ObjectFind(0, dashTitle) >= 0)
+   {
+      ObjectSetInteger(0, dashTitle, OBJPROP_XDISTANCE, newX + 10);
+      ObjectSetInteger(0, dashTitle, OBJPROP_YDISTANCE, newY + (DashboardMovable ? 25 : 10));
+   }
+   
+   // Move all other labels
+   MoveLabel(dashLine1, newX + 10, titleY);
+   MoveLabel(dashLine2, newX + 10, titleY + 20);
+   MoveLabel(dashLine3, newX + 10, titleY + 40);
+   MoveLabel(dashLine4, newX + 10, titleY + 60);
+   MoveLabel(dashLine5, newX + 10, titleY + 80);
+   MoveLabel(dashLine6, newX + 10, titleY + 100);
+   MoveLabel(dashLine7, newX + 10, titleY + 120);
+   MoveLabel(dashLine8, newX + 10, titleY + 140);
+   MoveLabel(dashLine9, newX + 10, titleY + 160);
+   MoveLabel(dashLine10, newX + 10, titleY + 180);
+   MoveLabel(dashLine11, newX + 10, titleY + 200);
+   MoveLabel(dashLine12, newX + 10, titleY + 220);
+   MoveLabel(dashLine13, newX + 10, titleY + 240);
+   MoveLabel(dashLine14, newX + 10, titleY + 260);
+   MoveLabel(dashLine15, newX + 10, titleY + 300);
+   
+   ChartRedraw(0);
+}
+
+//+------------------------------------------------------------------+
+//| Helper to move a label                                           |
+//+------------------------------------------------------------------+
+void MoveLabel(string name, int x, int y)
+{
+   if(ObjectFind(0, name) >= 0)
+   {
+      ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
+      ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Get bias text                                                    |
+//+------------------------------------------------------------------+
+string GetBiasText()
+{
+   switch(TradeBias)
+   {
+      case BIAS_BUY_ONLY: return "BUY ONLY";
+      case BIAS_SELL_ONLY: return "SELL ONLY";
+      case BIAS_BUY_70: return "70/30 BIAS";
+      case BIAS_BUY_60: return "60/40 BIAS";
+      case BIAS_BUY_50: return "50/50 BALANCED";
+      case BIAS_SELL_60: return "40/60 BIAS";
+      case BIAS_SELL_70: return "30/70 BIAS";
+   }
+   return "UNKNOWN";
+}
+
+//+------------------------------------------------------------------+
+//| Get bias color                                                   |
+//+------------------------------------------------------------------+
+color GetBiasColor()
+{
+   switch(TradeBias)
+   {
+      case BIAS_BUY_ONLY: return clrDodgerBlue;
+      case BIAS_SELL_ONLY: return clrRed;
+      case BIAS_BUY_70:
+      case BIAS_BUY_60: return clrMagenta;
+      case BIAS_BUY_50: return clrWhite;
+      case BIAS_SELL_60:
+      case BIAS_SELL_70: return clrOrange;
+   }
+   return clrWhite;
+}
+
+//+------------------------------------------------------------------+
+//| Update current ratio label                                       |
+//+------------------------------------------------------------------+
+void UpdateCurrentRatioLabel(int x, int y)
+{
+   double currentBuyPercent = 0;
+   double currentSellPercent = 0;
+   int totalBiasOrders = totalBuyOrders + totalSellOrders;
+   
+   if(totalBiasOrders > 0)
+   {
+      currentBuyPercent = (double)totalBuyOrders / totalBiasOrders * 100;
+      currentSellPercent = (double)totalSellOrders / totalBiasOrders * 100;
+   }
+   
+   string text = "CURRENT: " + DoubleToString(currentBuyPercent, 1) + "% Buy / " + 
+                 DoubleToString(currentSellPercent, 1) + "% Sell";
+   
+   color textColor = clrWhite;
+   if(totalBiasOrders > 0)
+   {
+      double buyDiff = MathAbs(currentBuyPercent - targetBuyPercentage);
+      if(buyDiff < 5) textColor = clrLime;
+      else if(buyDiff < 10) textColor = clrYellow;
+      else textColor = clrOrange;
+   }
+   
+   if(ObjectFind(0, dashLine4) >= 0)
+   {
+      ObjectSetString(0, dashLine4, OBJPROP_TEXT, text);
+      ObjectSetInteger(0, dashLine4, OBJPROP_COLOR, textColor);
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Update cooldown label                                            |
+//+------------------------------------------------------------------+
+void UpdateCooldownLabel(int x, int y)
+{
+   int remaining = GetCooldownRemaining();
+   string status;
+   color statusColor;
+   
+   if(remaining > 0)
+   {
+      status = "⏳ COOLDOWN: " + IntegerToString(remaining) + "s remaining";
+      statusColor = clrYellow;
+   }
+   else
+   {
+      status = "✅ COOLDOWN: READY TO TRADE";
+      statusColor = clrLime;
+   }
+   
+   if(ObjectFind(0, dashLine6) >= 0)
+   {
+      ObjectSetString(0, dashLine6, OBJPROP_TEXT, status);
+      ObjectSetInteger(0, dashLine6, OBJPROP_COLOR, statusColor);
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Update positions label                                           |
+//+------------------------------------------------------------------+
+void UpdatePositionsLabel(int x, int y)
+{
+   int openPos = CountOpenTrades();
+   string text = "📊 OPEN POSITIONS: " + IntegerToString(openPos) + " / " + IntegerToString(MaxOpenTrades);
+   color textColor = (openPos >= MaxOpenTrades) ? clrRed : clrLime;
+   
+   if(ObjectFind(0, dashLine7) >= 0)
+   {
+      ObjectSetString(0, dashLine7, OBJPROP_TEXT, text);
+      ObjectSetInteger(0, dashLine7, OBJPROP_COLOR, textColor);
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Update orders label                                              |
+//+------------------------------------------------------------------+
+void UpdateOrdersLabel(int x, int y)
+{
+   string text = "📈 ORDERS: " + IntegerToString(totalOrders) + 
+                 " (🔵 " + IntegerToString(buyOrders) + 
+                 " / 🔴 " + IntegerToString(sellOrders) + ")";
+   
+   if(ObjectFind(0, dashLine9) >= 0)
+      ObjectSetString(0, dashLine9, OBJPROP_TEXT, text);
+}
+
+//+------------------------------------------------------------------+
+//| Update win/loss label                                            |
+//+------------------------------------------------------------------+
+void UpdateWinLossLabel(int x, int y)
+{
+   string text = "🎯 WIN: " + IntegerToString(winningTrades) + 
+                 " / 💔 LOSS: " + IntegerToString(losingTrades);
+   
+   if(ObjectFind(0, dashLine10) >= 0)
+      ObjectSetString(0, dashLine10, OBJPROP_TEXT, text);
+}
+
+//+------------------------------------------------------------------+
+//| Update win rate label                                            |
+//+------------------------------------------------------------------+
+void UpdateWinRateLabel(int x, int y)
+{
+   double winRate = (totalOrders > 0) ? (double)winningTrades / totalOrders * 100 : 0;
+   string text = "📊 WIN RATE: " + DoubleToString(winRate, 1) + "%";
+   color rateColor;
+   
+   if(winRate >= 60) rateColor = clrLime;
+   else if(winRate >= 50) rateColor = clrYellow;
+   else rateColor = clrRed;
+   
+   if(ObjectFind(0, dashLine11) >= 0)
+   {
+      ObjectSetString(0, dashLine11, OBJPROP_TEXT, text);
+      ObjectSetInteger(0, dashLine11, OBJPROP_COLOR, rateColor);
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Update profit label                                              |
+//+------------------------------------------------------------------+
+void UpdateProfitLabel(int x, int y)
+{
+   double netPL = totalProfit - totalLoss;
+   string text = "💰 NET P/L: $" + DoubleToString(netPL, 2) + 
+                 " (P: $" + DoubleToString(totalProfit, 2) + 
+                 " / L: $" + DoubleToString(totalLoss, 2) + ")";
+   color profitColor;
+   
+   if(netPL > 0) profitColor = clrLime;
+   else if(netPL < 0) profitColor = clrRed;
+   else profitColor = clrWhite;
+   
+   if(ObjectFind(0, dashLine13) >= 0)
+   {
+      ObjectSetString(0, dashLine13, OBJPROP_TEXT, text);
+      ObjectSetInteger(0, dashLine13, OBJPROP_COLOR, profitColor);
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Update max profit/loss label                                     |
+//+------------------------------------------------------------------+
+void UpdateMaxLabel(int x, int y)
+{
+   string text = "🏆 MAX: $" + DoubleToString(maxProfit, 2) + 
+                 " / 💔 MIN: $" + DoubleToString(maxLoss, 2);
+   
+   if(ObjectFind(0, dashLine14) >= 0)
+      ObjectSetString(0, dashLine14, OBJPROP_TEXT, text);
+}
+
+//+------------------------------------------------------------------+
+//| Update time label                                                |
+//+------------------------------------------------------------------+
+void UpdateTimeLabel(int x, int y)
+{
+   string text = "⏱️ UPDATED: " + TimeToString(TimeCurrent(), TIME_SECONDS);
+   
+   if(ObjectFind(0, dashLine15) >= 0)
+      ObjectSetString(0, dashLine15, OBJPROP_TEXT, text);
+}
+
+//+------------------------------------------------------------------+
+//| Update entire dashboard                                          |
+//+------------------------------------------------------------------+
+void UpdateDashboard()
+{
+   if(!ShowDashboard || !dashboardCreated) return;
+   
+   int x = currentX;
+   int y = currentY;
+   int titleY = y + (DashboardMovable ? 50 : 35);
+   
+   UpdateCurrentRatioLabel(x + 10, titleY + 60);
+   UpdateCooldownLabel(x + 10, titleY + 100);
+   UpdatePositionsLabel(x + 10, titleY + 120);
+   UpdateOrdersLabel(x + 10, titleY + 160);
+   UpdateWinLossLabel(x + 10, titleY + 180);
+   UpdateWinRateLabel(x + 10, titleY + 200);
+   UpdateProfitLabel(x + 10, titleY + 240);
+   UpdateMaxLabel(x + 10, titleY + 260);
+   UpdateTimeLabel(x + 10, titleY + 300);
+   
+   ChartRedraw(0);
+}
+
+//+------------------------------------------------------------------+
+//| Destroy dashboard                                                |
+//+------------------------------------------------------------------+
+void DestroyDashboard()
+{
+   if(!dashboardCreated) return;
+   
+   for(int i = ObjectsTotal(0) - 1; i >= 0; i--)
+   {
+      string name = ObjectName(0, i);
+      if(StringFind(name, dashPrefix) == 0)
+         ObjectDelete(0, name);
+   }
+   
+   dashboardCreated = false;
+   ChartRedraw(0);
+}
+
+//+------------------------------------------------------------------+
+//| Check if we should take a Buy trade based on ratio               |
+//+------------------------------------------------------------------+
+bool ShouldTakeBuy()
+{
+   if(targetBuyPercentage == 100) return true;
+   if(targetBuyPercentage == 0) return false;
+   
+   int totalBiasOrders = totalBuyOrders + totalSellOrders;
+   if(totalBiasOrders == 0) return true;
+   
+   double currentBuyPercent = (double)totalBuyOrders / totalBiasOrders * 100;
+   double currentSellPercent = (double)totalSellOrders / totalBiasOrders * 100;
+   
+   if(currentBuyPercent < targetBuyPercentage)
+      return true;
+   else if(currentSellPercent < targetSellPercentage)
+      return false;
+   
+   double buyDiff = targetBuyPercentage - currentBuyPercent;
+   double sellDiff = targetSellPercentage - currentSellPercent;
+   
+   return (buyDiff >= sellDiff);
+}
+
+//+------------------------------------------------------------------+
+//| Check if we should take a Sell trade based on ratio              |
+//+------------------------------------------------------------------+
+bool ShouldTakeSell()
+{
+   if(targetSellPercentage == 100) return true;
+   if(targetSellPercentage == 0) return false;
+   
+   int totalBiasOrders = totalBuyOrders + totalSellOrders;
+   if(totalBiasOrders == 0) return true;
+   
+   double currentBuyPercent = (double)totalBuyOrders / totalBiasOrders * 100;
+   double currentSellPercent = (double)totalSellOrders / totalBiasOrders * 100;
+   
+   if(currentSellPercent < targetSellPercentage)
+      return true;
+   else if(currentBuyPercent < targetBuyPercentage)
+      return false;
+   
+   double buyDiff = targetBuyPercentage - currentBuyPercent;
+   double sellDiff = targetSellPercentage - currentSellPercent;
+   
+   return (sellDiff >= buyDiff);
+}
+
+//+------------------------------------------------------------------+
+//| Check cooldown status                                            |
+//+------------------------------------------------------------------+
+bool IsCooldownOver()
+{
+   if(CooldownSeconds <= 0) return true;
+   
+   datetime now = TimeCurrent();
+   if(now - lastTradeTime >= CooldownSeconds)
+      return true;
+   
+   return false;
+}
+
+//+------------------------------------------------------------------+
+//| Get cooldown remaining time                                      |
+//+------------------------------------------------------------------+
+int GetCooldownRemaining()
+{
+   if(CooldownSeconds <= 0) return 0;
+   
+   datetime now = TimeCurrent();
+   int elapsed = (int)(now - lastTradeTime);
+   int remaining = CooldownSeconds - elapsed;
+   
+   return (remaining > 0) ? remaining : 0;
+}
+
+//+------------------------------------------------------------------+
+//| Count open trades                                                |
+//+------------------------------------------------------------------+
+int CountOpenTrades()
+{
+   int count = 0;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket > 0 && PositionSelectByTicket(ticket))
+      {
+         if(PositionGetInteger(POSITION_MAGIC) == MagicNumber)
+         {
+            count++;
+         }
+      }
+   }
+   return count;
+}
+
+//+------------------------------------------------------------------+
+//| Update trade statistics                                          |
+//+------------------------------------------------------------------+
+void UpdateTradeStats(ulong ticket)
+{
+   if(HistoryDealSelect(ticket))
+   {
+      double profit = HistoryDealGetDouble(ticket, DEAL_PROFIT);
+      long type = HistoryDealGetInteger(ticket, DEAL_TYPE);
+      
+      totalOrders++;
+      
+      if(type == DEAL_TYPE_BUY)
+      {
+         buyOrders++;
+         totalBuyOrders++;
+      }
+      else if(type == DEAL_TYPE_SELL)
+      {
+         sellOrders++;
+         totalSellOrders++;
+      }
+      
+      if(profit > 0)
+      {
+         winningTrades++;
+         totalProfit += profit;
+         if(profit > maxProfit)
+            maxProfit = profit;
+      }
+      else if(profit < 0)
+      {
+         losingTrades++;
+         totalLoss += MathAbs(profit);
+         if(MathAbs(profit) > maxLoss)
+            maxLoss = MathAbs(profit);
+      }
+      
+      // Update dashboard
+      if(ShowDashboard)
+         UpdateDashboard();
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Expert tick function                                             |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+   if(!isInitialized) return;
+   
+   double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+   
+   // Update dashboard every second
+   if(ShowDashboard && TimeCurrent() - lastDashboardUpdate >= 1)
+   {
+      UpdateDashboard();
+      lastDashboardUpdate = TimeCurrent();
+   }
+   
+   // Check max trades
+   if(CountOpenTrades() >= MaxOpenTrades) 
+      return;
+   
+   // Check cooldown
+   if(!IsCooldownOver())
+      return;
+   
+   // Price movement detection
+   bool priceUp = (bid > lastBid);
+   bool priceDown = (bid < lastBid);
+   
+   // Apply bias filter with ratio control
+   bool shouldTrade = false;
+   ENUM_ORDER_TYPE tradeType = ORDER_TYPE_BUY;
+   
+   if(priceUp && ShouldTakeBuy())
+   {
+      shouldTrade = true;
+      tradeType = ORDER_TYPE_BUY;
+   }
+   else if(priceDown && ShouldTakeSell())
+   {
+      shouldTrade = true;
+      tradeType = ORDER_TYPE_SELL;
+   }
+   
+   // Execute trade if conditions met
+   if(shouldTrade)
+   {
+      PlaceOrder(tradeType, ask, bid);
+      lastTradeTime = TimeCurrent();
+   }
+   
+   lastBid = bid;
+}
+
+//+------------------------------------------------------------------+
+//| Place Order                                                      |
+//+------------------------------------------------------------------+
+void PlaceOrder(ENUM_ORDER_TYPE type, double ask, double bid)
+{
+   double price = (type == ORDER_TYPE_BUY) ? ask : bid;
+   
+   // Convert pips to points (XAUUSD: 1 pip = 10 points)
+   double tpPoints = TakeProfitPips * 10 * Point();
+   double slPoints = StopLossPips * 10 * Point();
+   
+   double tp = 0;
+   double sl = 0;
+   
+   if(type == ORDER_TYPE_BUY)
+   {
+      tp = price + tpPoints;
+      sl = price - slPoints;
+   }
+   else
+   {
+      tp = price - tpPoints;
+      sl = price + slPoints;
+   }
+   
+   tp = NormalizeDouble(tp, _Digits);
+   sl = NormalizeDouble(sl, _Digits);
+   
+   if(tp <= 0 || sl <= 0) return;
+   
+   string comment = (type == ORDER_TYPE_BUY) ? "TICK BUY" : "TICK SELL";
+   
+   bool result = false;
+   
+   if(type == ORDER_TYPE_BUY)
+      result = Trade.Buy(LotSize, _Symbol, ask, sl, tp, comment);
+   else
+      result = Trade.Sell(LotSize, _Symbol, bid, sl, tp, comment);
+   
+   if(result)
+   {
+      Print("✅ ORDER PLACED - ", (type == ORDER_TYPE_BUY ? "BUY" : "SELL"));
+   }
+   else
+   {
+      int error = GetLastError();
+      Print("❌ ORDER FAILED - Error: ", error);
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Expert trade function                                            |
+//+------------------------------------------------------------------+
+void OnTradeTransaction(const MqlTradeTransaction &trans,
+                        const MqlTradeRequest &request,
+                        const MqlTradeResult &result)
+{
+   if(trans.type == TRADE_TRANSACTION_DEAL_ADD)
+   {
+      ulong dealTicket = trans.deal;
+      if(dealTicket > 0)
+      {
+         if(HistoryDealSelect(dealTicket))
+         {
+            if(HistoryDealGetInteger(dealTicket, DEAL_MAGIC) == MagicNumber &&
+               HistoryDealGetString(dealTicket, DEAL_SYMBOL) == _Symbol)
+            {
+               UpdateTradeStats(dealTicket);
+            }
+         }
+      }
+   }
+}
+//+------------------------------------------------------------------+

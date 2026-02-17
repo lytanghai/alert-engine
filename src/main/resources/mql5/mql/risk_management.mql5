@@ -1,0 +1,13 @@
+double CalculateLot(double riskPercent, double stopLossPoints)
+{
+   double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+   double riskAmount = balance * riskPercent / 100.0;
+
+   double tickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+   double lotStep = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+
+   double lot = riskAmount / (stopLossPoints * tickValue);
+   lot = MathFloor(lot / lotStep) * lotStep;
+
+   return NormalizeDouble(lot, 2);
+}

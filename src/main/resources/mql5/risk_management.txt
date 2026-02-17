@@ -1,0 +1,3 @@
+Risk Management Function (CRITICAL)
+- Never trade without position size control.
+- Example risk-based lot size:

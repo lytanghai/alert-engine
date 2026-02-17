@@ -1,13 +1,23 @@
 spring:
-  #  profiles:
-  #    active: local
   application:
     name: alert-engine
 
+  datasource:
+    url: jdbc:postgresql://aws-1-ap-south-1.pooler.supabase.com:6543/postgres
+    username: postgres.akqbuskviaxgpmzogytu
+    password: 309927605Hai@
+  jpa:
+    hibernate:
+      ddl-auto: update   # auto create/update tables
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
 server:
-  port: ${PORT:8080}
+  port: 8080
 
 telegram:
   bot:
-    token: ${TELEGRAM_BOT_TOKEN}
-    chat-id: ${TELEGRAM_BOT_CHAT_ID}
+    token: 123
+    chat-id: 123

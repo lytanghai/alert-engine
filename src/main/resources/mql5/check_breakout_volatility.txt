@@ -1,0 +1,36 @@
+Feature:
+✅ Detect volatility spike
+✅ Confirm real breakout (not fake spike)
+✅ Send Telegram alert
+✅ Explain clearly how it works
+------------------------------------------------
+🔥 How Breakout Detection Works
+3 conditions conbine:
+
+📊 What Happens Internally
+
+Let’s say market was ranging.
+
+Suddenly:
+Candle becomes large
+ATR jumps
+Volume doubles
+Price closes above last 10 candles high
+
+→ That means strong buyers entered
+→ Real breakout
+→ Telegram alert sent
+
+Same logic for sell side.
+
+1️⃣ Volatility Expansion
+Current ATR > Previous ATR × Multiplier  === Means market just became active.
+
+2️⃣ Volume Spike  
+Current Volume > Previous Volume × Multiplier === Means real participation (not fake move).
+
+3️⃣ Breakout Confirmation === This avoids fake signals inside range.
+In case of breaking up:
+Current Close > Highest High of last 10 candles
+In case of break down:
+Current Close < Lowest Low of last 10 candles
