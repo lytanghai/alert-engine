@@ -1,0 +1,13 @@
+CREATE TABLE notifications (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    value TEXT,
+    extra TEXT,
+    has_read BOOLEAN NOT NULL DEFAULT FALSE,
+    sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_read_at TIMESTAMP
+);
+
+-- Optional: Create indexes for better performance
+CREATE INDEX idx_notifications_has_read ON notifications(has_read);
+CREATE INDEX idx_notifications_sent_at ON notifications(sent_at);

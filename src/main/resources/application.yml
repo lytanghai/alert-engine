@@ -2,10 +2,14 @@ spring:
   application:
     name: alert-engine
 
+  profile:
+    active: local
+
   datasource:
-    url: jdbc:postgresql://aws-1-ap-south-1.pooler.supabase.com:6543/postgres
-    username: postgres.akqbuskviaxgpmzogytu
-    password: 309927605Hai@
+    url: ${datasource.url}
+    username: ${datasource.username}
+    password: ${datasource.password}
+
   jpa:
     hibernate:
       ddl-auto: update   # auto create/update tables
@@ -15,9 +19,9 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
 server:
-  port: 8080
+  port: 8081
 
 telegram:
   bot:
-    token: 123
-    chat-id: 123
+    token: ${telegram.bot.token}
+    username: ${telegram.bot.username}

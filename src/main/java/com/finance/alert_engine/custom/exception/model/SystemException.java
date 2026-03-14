@@ -1,8 +1,6 @@
 package com.finance.alert_engine.custom.exception.model;
 
-import lombok.Data;
 
-@Data
 public class SystemException extends RuntimeException{
     private final String code;
     private final String message;
@@ -17,6 +15,10 @@ public class SystemException extends RuntimeException{
         super(message, cause);
         this.code = code;
         this.message = message;
+    }
+
+    public String getCode() {
+        return code;
     }
 
     @Override
