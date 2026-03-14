@@ -28,6 +28,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.apache.httpcomponents.client5:httpclient5'
     implementation("org.telegram:telegrambots-spring-boot-starter:6.9.7.1")
+    implementation 'org.telegram:telegrambots-webhook-spring-boot-starter:6.9.7.1'
+    implementation 'org.telegram:telegrambots-client:6.9.7.1'
     implementation("org.json:json:20231013")
     implementation 'org.postgresql:postgresql'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'

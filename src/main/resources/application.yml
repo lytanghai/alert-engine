@@ -20,5 +20,20 @@ spring:
 
 telegram:
   bot:
-    token: ${telegram.bot.token}
-    username: ${telegram.bot.username}
+    token: ${TELEGRAM_BOT_TOKEN}
+    username: ${TELEGRAM_BOT_USERNAME}
+  webhook:
+    # Your Render URL + path
+    url: ${WEBHOOK_URL:https://your-app.onrender.com/webhook}
+    path: /webhook
+    secret: ${WEBHOOK_SECRET:}  # Optional, for security
+
+telegram-bots:
+  enabled: false  # Disable auto-registration of polling bots
+
+
+
+#  TELEGRAM_BOT_TOKEN=your_bot_token
+#  TELEGRAM_BOT_USERNAME=your_bot_username
+#  WEBHOOK_URL=https://your-app.onrender.com/webhook
+#  SPRING_PROFILES_ACTIVE=prod
