@@ -1,0 +1,9 @@
+1. Register Telegram Webhook
+curl --request POST \
+  --url https://api.telegram.org/bot${botToken}/setWebhook \
+  --header 'content-type: multipart/form-data' \
+  --form url=https://alert-engine-h1mv.onrender.com
+
+2. Check Telegram Webhook
+curl --request GET \
+  --url https://api.telegram.org/bot${botToken}/getWebhookInfo

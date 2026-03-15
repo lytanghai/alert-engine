@@ -19,8 +19,7 @@ public class TelegramWebhookController {
     private final ObjectMapper objectMapper; // Add this for JSON parsing
 
 
-//    curl -F "url=https://your-render-app.onrender.com/webhook" \
-//            "https://api.telegram.org/botYOUR_BOT_TOKEN/setWebhook"
+
 
 //    verify: curl "https://api.telegram.org/botYOUR_BOT_TOKEN/getWebhookInfo"
 

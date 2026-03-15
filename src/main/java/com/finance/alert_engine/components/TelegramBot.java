@@ -55,6 +55,7 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
                     if(i == 1) value = messageText[1];
                     if(i == 2) extra = messageText[2];
                 }
+                log.info("saving new notification into storage");
                 notificationService.createFromTelegram(msg, value, extra, update.getMessage().getDate());
 
             }
