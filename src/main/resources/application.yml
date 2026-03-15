@@ -2,8 +2,11 @@ spring:
   application:
     name: alert-engine
 
-  profile:
-    active: local
+  autoconfigure:
+    exclude: org.telegram.telegrambots.longpolling.starter.TelegramBotLongPollingAutoConfiguration
+
+#  profile:
+#    active: local
 
   datasource:
     url: ${datasource.url}
