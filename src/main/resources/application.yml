@@ -4,9 +4,9 @@ spring:
 
   autoconfigure:
     exclude: org.telegram.telegrambots.longpolling.starter.TelegramBotLongPollingAutoConfiguration
-#
-#  profiles:
-#    active: local
+
+  profiles:
+    active: local
 
   datasource:
     url: ${datasource.url}
