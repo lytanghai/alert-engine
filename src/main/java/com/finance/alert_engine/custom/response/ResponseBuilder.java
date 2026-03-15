@@ -1,12 +1,10 @@
 package com.finance.alert_engine.custom.response;
 
-import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
 @Data
 @AllArgsConstructor
-@NotBlank
 public class ResponseBuilder<T> {
 
     private String status;
